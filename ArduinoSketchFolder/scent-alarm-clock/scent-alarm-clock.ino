@@ -12,6 +12,23 @@
 #define BUFFER_SIZE   256
 char    buff[BUFFER_SIZE];
 
+// Loop properties
+unsigned int  loopDurationMs  = 200;
+unsigned long loopStartMs     = 0L;
+unsigned long loopEndMs       = 0L;
+
+// Alarm door status
+#define ALARM_DOOR_STATUS_CLOSED    0
+#define ALARM_DOOR_STATUS_OPENING   1
+#define ALARM_DOOR_STATUS_OPEN      2
+#define ALARM_DOOR_STATUS_CLOSING   3
+int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
+int     alarmDoorOpeningPct = 0;          // Between 0 (closed) and 100 (open)
+
+// Testing
+#define DELAY_2BUTTONS_TEST_MS      3000
+
+
 // ----- Inits for the RTC clock
 #include <Wire.h>
 #include "ds3231.h"
@@ -21,8 +38,9 @@ struct ts rtcTime;
 #include "Adafruit_LEDBackpack.h"
 #include "Adafruit_GFX.h"
 
-Adafruit_7segment ledScreen         = Adafruit_7segment();
-boolean           middleColonToggle = false;
+Adafruit_7segment ledScreen                 = Adafruit_7segment();
+boolean           middleColonToggle         = false;
+unsigned long     timeToggledMiddleColonMs  = 0L;
 
 // TODO: Doc is wrong about writeDigitNum(location, number, dot)
 // 0x02 - center colon
@@ -31,13 +49,30 @@ boolean           middleColonToggle = false;
 // 0x10 - decimal point
 
 
+// ----- Inits for the buttons
+#define PIN_BUTTON_SET_CLOCK              2
+#define PIN_BUTTON_SET_WAKE_UP_TIME       4
+#define PIN_BUTTON_ALARM_ON_OFF           3
+
+// 0 if not pressed, or time in millis
+unsigned long timePressedSetClockMs       = 0L;
+unsigned long timePressedSetWakeUpTimeMs  = 0L;
+unsigned long timePressedAlarmOnOffMs     = 0L;
+
+
+// ----- Inits for the fan
+#define PIN_FAN                           6
+
+
 // ----- Inits for the DC motor
 // TODO
+// PINS 10 to 13
 
-// ----- Inits for the buttons
+
+
+
 // TODO
 
-// Two buttons pressed for 5secs should turn the alarm on to test
 
 
 
@@ -67,7 +102,17 @@ void setup()
     ledScreen.begin(0x70);
     ledScreen.setBrightness(15);     // Fully bright
 
+    // Buttons
+    pinMode( PIN_BUTTON_SET_CLOCK,        INPUT );
+    pinMode( PIN_BUTTON_SET_WAKE_UP_TIME, INPUT );
+    pinMode( PIN_BUTTON_ALARM_ON_OFF,     INPUT );
+
+    // Fan
+    pinMode( PIN_FAN,                     OUTPUT );
+
     // TODO: DC Motor
+
+    return;
 }
 
 
@@ -77,47 +122,58 @@ void setup()
  */
 void loop() 
 {
-    unsigned long loopStartMs = millis();
+    loopStartMs = millis();
 
     // --- Get time and display it
     DS3231_get( &rtcTime );
-#ifdef DEBUG
-    // display the time on the console
-    snprintf(buff, BUFFER_SIZE, "%d.%02d.%02d %02d:%02d:%02d", 
-            rtcTime.year, rtcTime.mon, rtcTime.mday, rtcTime.hour, rtcTime.min, rtcTime.sec);
-    Serial.println(buff);
-#endif
-    // display the time on the screen, toggling the middle colon every second
-    ledScreen.print( rtcTime.hour*100 + rtcTime.min, DEC);
-    middleColonToggle = !middleColonToggle;
-    ledScreen.drawColon( middleColonToggle );
-    ledScreen.writeDisplay();
-
-    // TODO: dots for AM/PM (or 24h format?)
-    // TODO: dot when alarm set
-
-    // Which dots on?
-    //  ledScreen.writeDigitNum(2, 1); // upper
-    //  ledScreen.writeDigitNum(2, 3); // upper + lower
-    //  ledScreen.writeDigitNum(2, 0); // upper + lower + decimal
-
-
+    displayTimeClock();
 
     // --- Check buttons
-
-
+    actOnButtons( digitalRead( PIN_BUTTON_SET_CLOCK )        == HIGH, 
+                  digitalRead( PIN_BUTTON_SET_WAKE_UP_TIME ) == HIGH, 
+                  digitalRead( PIN_BUTTON_ALARM_ON_OFF )     == HIGH );
+    // TODO: display alarm status (upper dot)
+    
+                  
+/*
+    if ( digitalRead( PIN_BUTTON_SET_CLOCK ) == HIGH ) {
+      ledScreen.print( 1111 );
+    }
+    else {
+        timePressedSetClockMs = 0L;
+    } 
+    
+    
+    if ( digitalRead( PIN_BUTTON_SET_WAKE_UP_TIME ) == HIGH ) {
+      ledScreen.print( 2222 );
+    }
+*/
+    
+    if ( digitalRead( PIN_BUTTON_ALARM_ON_OFF ) == HIGH ) {
+      ledScreen.print( 3333 );
+      analogWrite( PIN_FAN, 255 );
+    } else {
+      analogWrite( PIN_FAN, 0 );    
+    }
 
     // 
 
 
-  
 
-    // --- To loop every second. 
-    //      If took more than 1 sec, loop immediately
-    //      Otherwise try to loop until the next second precisely (000ms)
-    unsigned long loopEndMs = millis();
-    if ( loopEndMs - loopStartMs < 999 ) {
-        int diff = 999 - (loopEndMs % 1000);
+    // Write display when we are sure to have the correct thing displayed 
+    ledScreen.writeDisplay();
+
+    // --- To loop every loopDurationMs period. 
+    //      If took more than loopDurationMs, loop immediately
+    //      Otherwise try to loop until the next "tick" precisely (00ms)
+    loopEndMs = millis();
+    if ( loopEndMs - loopStartMs < loopDurationMs ) {
+        int diff = loopDurationMs - (loopEndMs % loopDurationMs);
+#ifdef DEBUG
+        Serial.print( "Waiting for " );
+        Serial.print( diff );
+        Serial.println( " ms" );
+#endif
         delay( diff );
     }
     return;
@@ -129,8 +185,127 @@ void loop()
 // ++++++ HELPER FUNCTIONS ++++++
 // =============================================================================================
 
+
 /**
- * Set the alarm clock
+ * Display the time from the RTC 
+ */
+void displayTimeClock()
+{
+#ifdef DEBUG
+    // display the time on the console
+    snprintf(buff, BUFFER_SIZE, "%d.%02d.%02d %02d:%02d:%02d", 
+        rtcTime.year, rtcTime.mon, rtcTime.mday, rtcTime.hour, rtcTime.min, rtcTime.sec);
+    Serial.println(buff);
+#endif
+    // display the time on the screen, toggling the middle colon every second
+    ledScreen.print( rtcTime.hour*100 + rtcTime.min, DEC);
+    if ( loopStartMs - timeToggledMiddleColonMs > 950 ) {
+        middleColonToggle = !middleColonToggle;
+        timeToggledMiddleColonMs = loopStartMs;
+    }
+    ledScreen.drawColon( middleColonToggle );
+
+    // TODO: dots for AM/PM (or 24h format?)
+    // TODO: dot when alarm set
+
+    // Which dots on?
+    //  ledScreen.writeDigitNum(2, 1); // upper
+    //  ledScreen.writeDigitNum(2, 3); // upper + lower
+    //  ledScreen.writeDigitNum(2, 0); // upper + lower + decimal
+
+    return;
+}
+
+
+
+/**
+ * Act according to the button(s) pressed 
+ */
+void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolean pressedAlarmOnOff )
+{
+    // 1.--- Two buttons pressed for 3 secs should turn the alarm on, to test
+    if ( pressedSetClock && pressedSetWakeUpTime ) {
+        if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPENING || alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
+            return;     // Nothing to do
+        }
+        if ( timePressedSetClockMs == 0L || timePressedSetWakeUpTimeMs == 0L ) {
+            // It's the moment when both are pressed that count the start
+            timePressedSetClockMs       = loopStartMs;
+            timePressedSetWakeUpTimeMs  = loopStartMs;
+        }
+        else {
+            // Find out if we need to change some status
+            if (  (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING || alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED) 
+               && (loopStartMs - timePressedSetClockMs > DELAY_2BUTTONS_TEST_MS) ) {
+                alarmDoorStatus     = ALARM_DOOR_STATUS_OPENING;
+                // alarmDoorOpeningPct = 0;   // Not for STATUS_CLOSING
+            }
+        }
+        return;
+    }
+
+    // 2.--- Setting the alarm on/off
+    if ( timePressedAlarmOnOffMs != 0L ) {
+        if ( pressedAlarmOnOff ) {    // Button still pressed, we ignore
+            return;
+        }
+        // Alarm on/off button has just been released. Reset timePressed and go on.
+        timePressedAlarmOnOffMs = 0L;
+    }
+    else if ( pressedAlarmOnOff ) {   // First time pressed
+        timePressedAlarmOnOffMs = loopStartMs;
+        // If alarm is on, turn it off
+        if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPENING || alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
+            alarmDoorStatus = ALARM_DOOR_STATUS_CLOSING;
+        } 
+        else if (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED) {
+            // Toggle between on and off the alarm
+
+            // TODO !!!!
+            
+        }
+        // else if (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING) // Ignore the press
+        return;
+    }
+
+    // 3.--- Setting the alarm time
+    if ( pressedSetWakeUpTime ) {
+
+
+        // Display alarm time
+
+        return;
+    }
+
+
+    // 4.--- Setting the clock
+    if ( pressedSetClock ) {
+
+
+        return;
+    }
+
+
+//#define ALARM_DOOR_STATUS_CLOSED    0
+//#define ALARM_DOOR_STATUS_OPENING   1
+//#define ALARM_DOOR_STATUS_OPEN      2
+//#define ALARM_DOOR_STATUS_CLOSING   3
+//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
+//int     alarmDoorOpeningPct = 0;
+
+
+//timePressedSetClockMs       = 0L;
+//unsigned long timePressedSetWakeUpTimeMs  = 0L;
+//unsigned long timePressedAlarmOnOffMs 
+
+    return;
+}
+
+
+
+
+/**
+ * Set the alarm clock   TODO !!!!!!!!
  */
 void set_alarm(uint8_t hour, uint8_t minute, uint8_t second)
 {
@@ -149,8 +324,6 @@ void set_alarm(uint8_t hour, uint8_t minute, uint8_t second)
     // activate Alarm1
     DS3231_set_creg(DS3231_INTCN | DS3231_A1IE);
 }
-
-
 
 
 
