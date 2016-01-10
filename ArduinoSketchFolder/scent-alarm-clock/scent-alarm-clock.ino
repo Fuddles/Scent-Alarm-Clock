@@ -132,31 +132,20 @@ void loop()
     actOnButtons( digitalRead( PIN_BUTTON_SET_CLOCK )        == HIGH, 
                   digitalRead( PIN_BUTTON_SET_WAKE_UP_TIME ) == HIGH, 
                   digitalRead( PIN_BUTTON_ALARM_ON_OFF )     == HIGH );
-    // TODO: display alarm status (upper dot)
-    
+    // Display alarm status (upper dot)
+    if ( isAlarmSet() ) {
+        ledScreen.writeDigitNum(2, 1);
+    }
                   
-/*
-    if ( digitalRead( PIN_BUTTON_SET_CLOCK ) == HIGH ) {
-      ledScreen.print( 1111 );
-    }
-    else {
-        timePressedSetClockMs = 0L;
-    } 
-    
-    
-    if ( digitalRead( PIN_BUTTON_SET_WAKE_UP_TIME ) == HIGH ) {
-      ledScreen.print( 2222 );
-    }
-*/
-    
+/*    
     if ( digitalRead( PIN_BUTTON_ALARM_ON_OFF ) == HIGH ) {
       ledScreen.print( 3333 );
       analogWrite( PIN_FAN, 255 );
     } else {
       analogWrite( PIN_FAN, 0 );    
     }
+*/
 
-    // 
 
 
 
@@ -260,9 +249,11 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         } 
         else if (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED) {
             // Toggle between on and off the alarm
-
-            // TODO !!!!
-            
+            if ( isAlarmSet() ) {
+                clearAlarm();
+            } else {
+                enableAlarm();
+            }            
         }
         // else if (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING) // Ignore the press
         return;
@@ -358,7 +349,6 @@ uint8_t* getAlarmTime()
     }
     f[4] = (n[3] & 0x40) >> 6;
     t[3] = bcdtodec(n[3] & 0x3F);
-
     return t;
 }
 
