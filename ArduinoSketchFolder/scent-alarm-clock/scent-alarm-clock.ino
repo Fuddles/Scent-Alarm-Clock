@@ -13,7 +13,7 @@
 char    buff[BUFFER_SIZE];
 
 // Loop properties
-unsigned int  loopDurationMs  = 200;
+unsigned int  loopDurationMs  = 200;      // Warning: impact the speed of time increase on setting alarm/time
 unsigned long loopStartMs     = 0L;
 unsigned long loopEndMs       = 0L;
 
@@ -33,6 +33,7 @@ int     alarmDoorOpeningPct = 0;          // Between 0 (closed) and 100 (open)
 #include <Wire.h>
 #include "ds3231.h"
 struct ts rtcTime;
+uint8_t   alarmRTCTime[4];                // second,minute,hour,day
 
 // ----- Inits for the screen
 #include "Adafruit_LEDBackpack.h"
@@ -261,11 +262,33 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 
     // 3.--- Setting the alarm time
     if ( pressedSetWakeUpTime ) {
-
-
+        if ( timePressedSetWakeUpTimeMs == 0L ) {                           // Just pressed
+            timePressedSetWakeUpTimeMs  = loopStartMs;
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 1000 ) {     // Less than 1 sec
+            // Just display the time
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 2000 ) {     // Less than 2 sec
+            addToAlarmTime( 25, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 3000 ) {     // Less than 3 sec
+            addToAlarmTime( 60, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 4000 ) {     // Less than 4 sec
+            addToAlarmTime( 150, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 5000 ) {     // Less than 5 sec
+            addToAlarmTime( 300, false );      // in seconds, reset seconds
+        } else {                                                            // After 5 sec
+            addToAlarmTime( 1500, false );     // in seconds, reset seconds
+        }
+        
         // Display alarm time
+        getAlarmTime();       // result in alarmRTCTime
+
+        // TODO!!!
 
         return;
+    } else {
+        if ( timePressedSetWakeUpTimeMs != 0L ) {                           // Just released
+              timePressedSetWakeUpTimeMs = 0L;
+              addToAlarmTime( 0, true );      // in seconds, reset seconds
+        }
     }
 
 
@@ -291,6 +314,9 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 
     return;
 }
+
+
+
 
 
 // ============================= ALARM ==========================================
@@ -331,9 +357,9 @@ void enableAlarm()
  */
 uint8_t* getAlarmTime()
 {
-    // Copied from DS3231_get_a1 to get the uint8_t[4] directly
+    // Copied from DS3231_get_a1 to get the uint8_t[4] directly into alarmRTCTime[]
     uint8_t n[4];
-    uint8_t t[4];               // second,minute,hour,day
+    //uint8_t t[4];             // alarmRTCTime second,minute,hour,day
     uint8_t f[5];               // flags
     uint8_t i;
 
@@ -345,18 +371,18 @@ uint8_t* getAlarmTime()
     for (i = 0; i <= 3; i++) {
         n[i] = Wire.read();
         f[i] = (n[i] & 0x80) >> 7;
-        t[i] = bcdtodec(n[i] & 0x7F);
+        alarmRTCTime[i] = bcdtodec(n[i] & 0x7F);
     }
     f[4] = (n[3] & 0x40) >> 6;
-    t[3] = bcdtodec(n[3] & 0x3F);
-    return t;
+    alarmRTCTime[3] = bcdtodec(n[3] & 0x3F);
+    return alarmRTCTime;
 }
 
 
 /**
  * Set the alarm time
  */
-void setAlarmTime(uint8_t hour, uint8_t minute, uint8_t second)
+void setAlarmTime(uint8_t second, uint8_t minute, uint8_t hour )
 {
     // flags define what calendar component to be checked against the current time in order
     // to trigger the alarm - see datasheet
@@ -373,6 +399,36 @@ void setAlarmTime(uint8_t hour, uint8_t minute, uint8_t second)
     return;
 }
 
+
+/**
+ *  Add a number of seconds to alarm time, and set the alarm on
+ *  @param resetSeconds set the alarm seconds do 0
+ */
+void addToAlarmTime( unsigned int addSeconds, boolean resetSeconds ) 
+{
+    getAlarmTime();           // result in alarmRTCTime second,minute,hour,day
+
+    if (addSeconds > 86400) {
+        addSeconds %= 86400;
+    }
+    uint8_t hours   = alarmRTCTime[2] + (unsigned int)(addSeconds / 3600);
+    uint8_t minutes = alarmRTCTime[1] + (unsigned int)(addSeconds / 60) % 60;
+    uint8_t seconds = resetSeconds ? 0 : alarmRTCTime[0] + (unsigned int)(addSeconds % 60);
+    if (seconds >= 60) {
+        minutes++;
+        seconds -= 60;
+    }
+    if (minutes >= 60) {
+        hours++;
+        minutes -= 60;
+    }
+    if (hours >= 24) {
+      hours -= 24;
+    }
+
+    setAlarmTime( seconds, minutes, hours );
+    return;  
+}
 
 
 
