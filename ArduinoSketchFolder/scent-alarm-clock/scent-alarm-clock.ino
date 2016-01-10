@@ -302,12 +302,71 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 }
 
 
+// ============================= ALARM ==========================================
+
+/**
+ *  @return true if the alarm is set  //  triggered
+ */
+boolean isAlarmSet()
+{
+    return ( DS3231_get_addr(DS3231_CONTROL_ADDR) & DS3231_A1IE ) ? true : false; 
+}
+
+boolean isAlarmTriggered()
+{
+    return ( DS3231_get_addr(DS3231_STATUS_ADDR) & DS3231_A1F ) ? true : false; 
+}
 
 
 /**
- * Set the alarm clock   TODO !!!!!!!!
+ *  Enable or clear Alarm
+ *  If alarm time is passed when we reenable the alarm, it will naturally be active the next day
  */
-void set_alarm(uint8_t hour, uint8_t minute, uint8_t second)
+void clearAlarm()
+{ 
+    // Disable + Clear the status
+    DS3231_set_creg( DS3231_get_addr(DS3231_CONTROL_ADDR) & ~DS3231_A1IE );
+    DS3231_clear_a1f();
+}
+
+void enableAlarm() 
+{
+    DS3231_set_creg( DS3231_get_addr(DS3231_CONTROL_ADDR) | DS3231_A1IE );
+}
+
+
+/**
+ *  Get alarm time as uint8_t[4] second, minute, hour, day
+ */
+uint8_t* getAlarmTime()
+{
+    // Copied from DS3231_get_a1 to get the uint8_t[4] directly
+    uint8_t n[4];
+    uint8_t t[4];               // second,minute,hour,day
+    uint8_t f[5];               // flags
+    uint8_t i;
+
+    Wire.beginTransmission(DS3231_I2C_ADDR);
+    Wire.write(DS3231_ALARM1_ADDR);
+    Wire.endTransmission();
+    Wire.requestFrom(DS3231_I2C_ADDR, 4);
+
+    for (i = 0; i <= 3; i++) {
+        n[i] = Wire.read();
+        f[i] = (n[i] & 0x80) >> 7;
+        t[i] = bcdtodec(n[i] & 0x7F);
+    }
+    f[4] = (n[3] & 0x40) >> 6;
+    t[3] = bcdtodec(n[3] & 0x3F);
+
+    return t;
+}
+
+
+/**
+ * Set the alarm time
+ */
+void setAlarmTime(uint8_t hour, uint8_t minute, uint8_t second)
 {
     // flags define what calendar component to be checked against the current time in order
     // to trigger the alarm - see datasheet
@@ -316,13 +375,12 @@ void set_alarm(uint8_t hour, uint8_t minute, uint8_t second)
     // A1M3 (hour)    (0 to enable, 1 to disable) 
     // A1M4 (day)     (0 to enable, 1 to disable)
     // DY/DT          (dayofweek == 1/dayofmonth == 0)
-    uint8_t flags[5] = { 0, 0, 0, 1, 1 };
+    uint8_t flags[5] = { 0, 0, 0, 1, 1 };           // Every day, when hours match
 
-    // set Alarm1
+    // set Alarm1 and enable it
     DS3231_set_a1( second, minute, hour, 0, flags);
-
-    // activate Alarm1
-    DS3231_set_creg(DS3231_INTCN | DS3231_A1IE);
+    enableAlarm();
+    return;
 }
 
 
