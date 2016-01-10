@@ -5,9 +5,12 @@
 // Comment the line to remove the console debugging (via Serial)
 #define DEBUG         true
 
+// Uncomment the line to set the time
+// #define SET_RTC_TIME  true
+
 // Buffer size to print on the console
-#define BUFFER_SIZE   2048
-char    buffer[BUFFER_SIZE];
+#define BUFFER_SIZE   256
+char    buff[BUFFER_SIZE];
 
 // ----- Inits for the RTC clock
 #include <Wire.h>
@@ -55,6 +58,10 @@ void setup()
     Wire.begin();
     DS3231_init(DS3231_INTCN);
     DS3231_clear_a1f();               // FIXME: should not reset the alarm but keep previous
+#ifdef SET_RTC_TIME
+    struct ts rightNowTime = { .sec = 0, .min = 8, .hour = 19, .mday = 9, .mon = 1, .year = 2016 };
+    DS3231_set( rightNowTime );
+#endif
 
     // Screen
     ledScreen.begin(0x70);
@@ -76,14 +83,14 @@ void loop()
     DS3231_get( &rtcTime );
 #ifdef DEBUG
     // display the time on the console
-    snprintf(buff, BUFF_MAX, "%d.%02d.%02d %02d:%02d:%02d", 
+    snprintf(buff, BUFFER_SIZE, "%d.%02d.%02d %02d:%02d:%02d", 
             rtcTime.year, rtcTime.mon, rtcTime.mday, rtcTime.hour, rtcTime.min, rtcTime.sec);
     Serial.println(buff);
 #endif
     // display the time on the screen, toggling the middle colon every second
     ledScreen.print( rtcTime.hour*100 + rtcTime.min, DEC);
     middleColonToggle = !middleColonToggle;
-    ledScreen.drawColon( middlecolon );
+    ledScreen.drawColon( middleColonToggle );
     ledScreen.writeDisplay();
 
     // TODO: dots for AM/PM (or 24h format?)
@@ -158,4 +165,3 @@ void set_alarm(uint8_t hour, uint8_t minute, uint8_t second)
 ////  ledScreen.writeDigitNum(2, 6, true ); // lower + upper + decimal (all)
 ////  ledScreen.writeDigitNum(2, 7, true ); // upper
 */
- */
