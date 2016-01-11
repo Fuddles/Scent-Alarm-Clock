@@ -251,7 +251,7 @@ void displayTimeClock()
     Serial.println(buff);
 #endif
     // display the time on the screen, toggling the middle colon every second
-    ledScreen.print( rtcTime.hour*100 + rtcTime.min, DEC);
+    printTimeOnLedScreen( rtcTime.hour, rtcTime.min );
     if ( loopStartMs - timeToggledMiddleColonMs > 950 ) {
         middleColonToggle = !middleColonToggle;
         timeToggledMiddleColonMs = loopStartMs;
@@ -269,7 +269,17 @@ void displayTimeClock()
     return;
 }
 
-
+void printTimeOnLedScreen( uint8_t hours, uint8_t minutes ) 
+{
+    ledScreen.print( hours*100 + minutes, DEC);
+    if (hours == 0) {
+        ledScreen.writeDigitNum( 1, 0 );    // location, number
+        if (minutes < 10) {
+            ledScreen.writeDigitNum( 3, 0 );
+        }
+    }
+    return;
+}
 
 
 // ============================= BUTTONS ==========================================
@@ -346,7 +356,8 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         
         // Display alarm time
         getAlarmTime();       // result in alarmRTCTime
-        ledScreen.print( alarmRTCTime[2]*100 + alarmRTCTime[1], DEC);
+        printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
+
         ledScreen.drawColon( true );
         return;
     } else {
