@@ -77,7 +77,7 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 #define STEPS_PER_OUTPUT_REVOLUTION       2048            // 32 * 64 = 2048  
 
 // Our total number of steps to open the door
-#define TOTAL_STEPS_DOOR_OPENING          350
+#define TOTAL_STEPS_DOOR_OPENING          400
 
 // Steps is the number of steps in one revolution of the motor. 32 according to
 Stepper motor = Stepper( STEPS_PER_MOTOR_REVOLUTION, MOTOR_PIN_IN1, MOTOR_PIN_IN3, MOTOR_PIN_IN2, MOTOR_PIN_IN4 );   // steps, pin1, pin2, pin3, pin4)
