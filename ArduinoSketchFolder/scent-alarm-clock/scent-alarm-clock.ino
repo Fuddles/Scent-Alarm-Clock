@@ -138,8 +138,8 @@ void setup()
     pinMode( PIN_FAN,                     OUTPUT );
 
     // DC Motor
-    motor.setSpeed( 768 );            // rpms: 2000 forbidden. 1000 gives ~4 seconds for 2048 steps = 360 deg
-    // Test: motor.step when >0 counter-clockwise. 512 is 90 deg
+    motor.setSpeed( 1024 );            // rpms: 2000 forbidden. 1000 gives ~4 seconds for 2048 steps = 360 deg
+    // Test: motor.step when >0 clockwise. 512 is 90 deg
     // motor.step( TOTAL_STEPS_DOOR_OPENING );            // WARNING: motor.step is BLOCKING!
 
     // Buzzer
