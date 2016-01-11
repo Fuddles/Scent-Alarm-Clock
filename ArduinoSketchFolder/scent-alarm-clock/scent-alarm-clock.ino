@@ -149,7 +149,7 @@ void loop()
                   digitalRead( PIN_BUTTON_ALARM_ON_OFF )     == HIGH );
     // Display alarm status (upper dot)
     if ( isAlarmSet() ) {
-        ledScreen.writeDigitNum(2, 1);
+        ledScreen.writeDigitRaw(2, middleColonToggle ? (0x04 | 0x02) : 0x04 );            // Raw, not num!
     }
 
     // --- Is the alarm triggering?
@@ -343,27 +343,30 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 1000 ) {     // Less than 1 sec
             // Just display the time
         } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 2000 ) {     // Less than 2 sec
-            addToAlarmTime( 25, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 3000 ) {     // Less than 3 sec
-            addToAlarmTime( 60, false );       // in seconds, reset seconds
+            addToAlarmTime( 15, false );       // in seconds, reset seconds
         } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 4000 ) {     // Less than 4 sec
-            addToAlarmTime( 150, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 5000 ) {     // Less than 5 sec
-            addToAlarmTime( 300, false );      // in seconds, reset seconds
-        } else {                                                            // After 5 sec
-            addToAlarmTime( 1500, false );     // in seconds, reset seconds
+            addToAlarmTime( 30, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 6000 ) {     // Less than 6 sec
+            addToAlarmTime( 60, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 8000 ) {     // Less than 8 sec
+            addToAlarmTime( 180, false );      // in seconds, reset seconds
+        } else {                                                            // After 8 sec
+            addToAlarmTime( 2000, false );     // in seconds, reset seconds
         }
         
         // Display alarm time
         getAlarmTime();       // result in alarmRTCTime
         printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
-
         ledScreen.drawColon( true );
         return;
     } else {
         if ( timePressedSetWakeUpTimeMs != 0L ) {                           // Just released
               timePressedSetWakeUpTimeMs = 0L;
               addToAlarmTime( 0, true );      // in seconds, reset seconds
+              // Display alarm time one more cycle
+              getAlarmTime();       // result in alarmRTCTime
+              printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
+              ledScreen.drawColon( true );
         }
     }
 
@@ -375,15 +378,15 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         } else if ( loopStartMs - timePressedSetClockMs < 1000 ) {          // Less than 1 sec
             // Just display the time
         } else if ( loopStartMs - timePressedSetClockMs < 2000 ) {          // Less than 2 sec
-            addToClockTime( 25, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 3000 ) {          // Less than 3 sec
-            addToClockTime( 60, false );       // in seconds, reset seconds
+            addToClockTime( 15, false );       // in seconds, reset seconds
         } else if ( loopStartMs - timePressedSetClockMs < 4000 ) {          // Less than 4 sec
-            addToClockTime( 150, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 5000 ) {          // Less than 5 sec
-            addToClockTime( 300, false );      // in seconds, reset seconds
-        } else {                                                            // After 5 sec
-            addToClockTime( 1500, false );     // in seconds, reset seconds
+            addToClockTime( 30, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 6000 ) {          // Less than 6 sec
+            addToClockTime( 60, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 8000 ) {          // Less than 8 sec
+            addToClockTime( 180, false );      // in seconds, reset seconds
+        } else {                                                            // After 8 sec
+            addToClockTime( 2000, false );     // in seconds, reset seconds
         }
 
         // Display the updated clock
@@ -679,10 +682,11 @@ unsigned int frequency(char note)
 
 
 /*
-// TODO: Doc is wrong about writeDigitNum(location, number, dot). Or mess up with drawColon() ?
+// NOTE: Doc is wrong about writeDigitNum(location, number, dot).
+// Use writeDigitRaw(location, bitmask)       RAW, not num!
 // 0x02 - center colon
-// 0x04 - left colon - lower dot
-// 0x08 - left colon - upper dot
+// 0x04 - left colon - upper dot
+// 0x08 - left colon - lower dot
 // 0x10 - decimal point
 
 ////  ledScreen.writeDigitNum(2, 0, true ); // lower + upper + decimal (all)
