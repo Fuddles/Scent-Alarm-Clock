@@ -8,6 +8,10 @@
 // Uncomment the line to set the time
 // #define SET_RTC_TIME  true
 
+// Delay and duration when alarm ON
+#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     30
+#define MAX_DURATION_DOOR_OPEN_SECS           600
+
 // Buffer size to print on the console
 #define BUFFER_SIZE   256
 char    buff[BUFFER_SIZE];
@@ -159,15 +163,15 @@ void loop()
     // --- Get time and display it
     DS3231_get( &rtcTime );
     displayTimeClock();
+    // Display alarm status (upper dot)
+    if ( isAlarmSet() ) {
+        ledScreen.writeDigitRaw(2, middleColonToggle ? (0x04 | 0x02) : 0x04 );            // Raw, not num!
+    }
 
     // --- Check buttons
     actOnButtons( digitalRead( PIN_BUTTON_SET_CLOCK )        == HIGH, 
                   digitalRead( PIN_BUTTON_SET_WAKE_UP_TIME ) == HIGH, 
                   digitalRead( PIN_BUTTON_ALARM_ON_OFF )     == HIGH );
-    // Display alarm status (upper dot)
-    if ( isAlarmSet() ) {
-        ledScreen.writeDigitRaw(2, middleColonToggle ? (0x04 | 0x02) : 0x04 );            // Raw, not num!
-    }
 
     // --- Is the alarm triggering?
     if ( isAlarmTriggered() ) {
@@ -324,22 +328,18 @@ void performDoorFanBuzzerAlarm()
     }
     
     if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
-        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 30000 && !buzzerIsPlaying ) {
+        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 1000 * MAX_DURATION_DOOR_OPEN_SECS ) {
+            // After 10 min, stop the alarm anyway
+            alarmDoorStatus                = ALARM_DOOR_STATUS_CLOSING;
+            timeTriggeredOpeningClosingMs  = 0L;
+            clearAlarm();
+            return;
+        }
+        if ( !buzzerIsPlaying && loopStartMs - timeTriggeredOpeningClosingMs >= 1000 * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS ) {
             // After 15s, play tune !
             playTune( BUZZER_ALARM );
         }
     }
-               
-//#define ALARM_DOOR_STATUS_CLOSED    0
-//#define ALARM_DOOR_STATUS_OPENING   1
-//#define ALARM_DOOR_STATUS_OPEN      2
-//#define ALARM_DOOR_STATUS_CLOSING   3
-//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
-//int     alarmDoorOpeningPct = 0;
-
-//unsigned long timeTriggeredOpeningClosingMs          = 0L;
-
-
     return;
 }
 
@@ -467,10 +467,10 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
             addToAlarmTime( 2000, false );     // in seconds, reset seconds
         }
         
-        // Display alarm time
+        // Display alarm time. With lower dot to distinguish
         getAlarmTime();       // result in alarmRTCTime
         printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
-        ledScreen.drawColon( true );
+        ledScreen.writeDigitRaw(2, 0x08 | 0x02 );            // Lower left + colon.  Raw, not num!
         return;
     } else {
         if ( timePressedSetWakeUpTimeMs != 0L ) {                           // Just released
@@ -479,7 +479,7 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
               // Display alarm time one more cycle
               getAlarmTime();       // result in alarmRTCTime
               printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
-              ledScreen.drawColon( true );
+              ledScreen.writeDigitRaw(2, 0x08 | 0x02 );            // Lower left + colon.  Raw, not num!
         }
     }
 
@@ -528,7 +528,7 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 void initRTCAlarm()
 {
     Wire.begin();
-    DS3231_set_creg( DS3231_get_addr(DS3231_CONTROL_ADDR) | DS3231_INTCN );   // Enable INT pin on the DS3231
+    //DS3231_set_creg( DS3231_get_addr(DS3231_CONTROL_ADDR) | DS3231_INTCN );   // NO, otw trigger even when A1 not enabled. Enable INT pin on the DS3231
     DS3231_clear_a1f();               // Reset the alarm signal, but keep previous time and config
 #ifdef SET_RTC_TIME
     struct ts rightNowTime = { .sec = 0, .min = 8, .hour = 19, .mday = 9, .mon = 1, .year = 2016 };
@@ -548,7 +548,9 @@ boolean isAlarmSet()
 
 boolean isAlarmTriggered()
 {
-    return ( DS3231_get_addr(DS3231_STATUS_ADDR) & DS3231_A1F ) ? true : false; 
+    boolean isTriggered = ( DS3231_get_addr(DS3231_STATUS_ADDR) & DS3231_A1F ) ? true : false; 
+    // To be sure, double check it was enabled
+    return ( isTriggered && isAlarmSet() );
 }
 
 
