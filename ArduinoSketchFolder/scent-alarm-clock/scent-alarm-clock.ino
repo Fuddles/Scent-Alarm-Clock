@@ -148,6 +148,19 @@ void loop()
 */
 
 
+//#define ALARM_DOOR_STATUS_CLOSED    0
+//#define ALARM_DOOR_STATUS_OPENING   1
+//#define ALARM_DOOR_STATUS_OPEN      2
+//#define ALARM_DOOR_STATUS_CLOSING   3
+//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
+//int     alarmDoorOpeningPct = 0;
+
+
+//timePressedSetClockMs       = 0L;
+//unsigned long timePressedSetWakeUpTimeMs  = 0L;
+//unsigned long timePressedAlarmOnOffMs 
+
+
 
 
     // Write display when we are sure to have the correct thing displayed 
@@ -280,9 +293,8 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         
         // Display alarm time
         getAlarmTime();       // result in alarmRTCTime
-
-        // TODO!!!
-
+        ledScreen.print( alarmRTCTime[2]*100 + alarmRTCTime[1], DEC);
+        ledScreen.drawColon( true );
         return;
     } else {
         if ( timePressedSetWakeUpTimeMs != 0L ) {                           // Just released
@@ -294,24 +306,33 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 
     // 4.--- Setting the clock
     if ( pressedSetClock ) {
+        if ( timePressedSetClockMs == 0L ) {                                // Just pressed
+            timePressedSetClockMs  = loopStartMs;
+        } else if ( loopStartMs - timePressedSetClockMs < 1000 ) {          // Less than 1 sec
+            // Just display the time
+        } else if ( loopStartMs - timePressedSetClockMs < 2000 ) {          // Less than 2 sec
+            addToClockTime( 25, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 3000 ) {          // Less than 3 sec
+            addToClockTime( 60, false );       // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 4000 ) {          // Less than 4 sec
+            addToClockTime( 150, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 5000 ) {          // Less than 5 sec
+            addToClockTime( 300, false );      // in seconds, reset seconds
+        } else {                                                            // After 5 sec
+            addToClockTime( 1500, false );     // in seconds, reset seconds
+        }
 
-
+        // Display the updated clock
+        displayTimeClock();
         return;
+    } else {
+        if ( timePressedSetClockMs != 0L ) {                           // Just released
+              timePressedSetClockMs = 0L;
+              addToClockTime( 0, true );      // in seconds, reset seconds
+        }
     }
 
-
-//#define ALARM_DOOR_STATUS_CLOSED    0
-//#define ALARM_DOOR_STATUS_OPENING   1
-//#define ALARM_DOOR_STATUS_OPEN      2
-//#define ALARM_DOOR_STATUS_CLOSING   3
-//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
-//int     alarmDoorOpeningPct = 0;
-
-
-//timePressedSetClockMs       = 0L;
-//unsigned long timePressedSetWakeUpTimeMs  = 0L;
-//unsigned long timePressedAlarmOnOffMs 
-
+    // Nothing pressed
     return;
 }
 
@@ -427,6 +448,44 @@ void addToAlarmTime( unsigned int addSeconds, boolean resetSeconds )
     }
 
     setAlarmTime( seconds, minutes, hours );
+    return;  
+}
+
+
+
+// ============================= SET CLOCK ==========================================
+
+/**
+ *  Add a number of seconds to clock time
+ *  @param resetSeconds set the clock seconds do 0
+ */
+void addToClockTime( unsigned int addSeconds, boolean resetSeconds ) 
+{
+    DS3231_get( &rtcTime );
+
+    if (addSeconds > 86400) {
+        addSeconds %= 86400;
+    }
+    uint8_t hours   = rtcTime.hour + (unsigned int)(addSeconds / 3600);
+    uint8_t minutes = rtcTime.min  + (unsigned int)(addSeconds / 60) % 60;
+    uint8_t seconds = resetSeconds ? 0 : rtcTime.sec + (unsigned int)(addSeconds % 60);
+    if (seconds >= 60) {
+        minutes++;
+        seconds -= 60;
+    }
+    if (minutes >= 60) {
+        hours++;
+        minutes -= 60;
+    }
+    if (hours >= 24) {
+      hours -= 24;
+    }
+
+    // Set time, keeping days, months, and year
+    rtcTime.hour = hours;
+    rtcTime.min  = minutes;
+    rtcTime.sec  = seconds;
+    DS3231_set( rtcTime );
     return;  
 }
 
