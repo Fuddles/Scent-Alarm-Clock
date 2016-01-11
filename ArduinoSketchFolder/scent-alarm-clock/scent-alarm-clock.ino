@@ -13,7 +13,7 @@
 char    buff[BUFFER_SIZE];
 
 // Loop properties
-unsigned int  loopDurationMs  = 200;      // Warning: impact the speed of time increase on setting alarm/time
+unsigned int  loopDurationMs  = 200;      // Warning: impact the speed of time increase on setting alarm/time + note length (for tunes)
 unsigned long loopStartMs     = 0L;
 unsigned long loopEndMs       = 0L;
 
@@ -43,12 +43,6 @@ Adafruit_7segment ledScreen                 = Adafruit_7segment();
 boolean           middleColonToggle         = false;
 unsigned long     timeToggledMiddleColonMs  = 0L;
 
-// TODO: Doc is wrong about writeDigitNum(location, number, dot)
-// 0x02 - center colon
-// 0x04 - left colon - lower dot
-// 0x08 - left colon - upper dot
-// 0x10 - decimal point
-
 
 // ----- Inits for the buttons
 #define PIN_BUTTON_SET_CLOCK              2
@@ -64,17 +58,37 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 // ----- Inits for the fan
 #define PIN_FAN                           6
 
+// ----- Inits for the DC motor: PINS and trigger time    // TODO: PINS 8,9,12,13
+#define MOTOR_PIN_IN1                     10
+#define MOTOR_PIN_IN2                     11 
+#define MOTOR_PIN_IN3                     12 
+#define MOTOR_PIN_IN4                     13 
 
-// ----- Inits for the DC motor
-// TODO
-// PINS 10 to 13
+unsigned long timeTriggeredAlarm          = 0L;
 
+// --- Buzzer defs
+//      WARNING: Use of the tone() function will interfere with PWM output on pins 3 and 11    // FIXME!!
+#define BUZZER_PWD_PIN                    5 
 
+#define BUZZER_ALARM                      1
+#define BUZZER_CLOSING_DOOR               2
+#define BUZZER__LAST_TUNE                 2
 
+#define BUZZER_ONE_NOTE_DURATION_MS       loopDurationMs
+#define BUZZER_ONE_NOTE_SUPPL_MS          200
 
-// TODO
-
-
+// Tunes are series of letters of equal duration (loopDurationMs), so write the same note several times to play it longer
+//  char notes[] = { ' ', 'S', 'A', 'B', 'C', 'K', 'D', 'E', 'F', 'P', 'G', 'a', 'b', 'c', 'k', 'd', 'e', 'f', 'p', 'g', 'h', 'i' };
+//  Added by Eric:    S= G3   K= C4#   k= C5#   P= F4#   p= F5#
+char* TUNES[] = {  " ",
+                   "CCCCGGcccc ",        // BUZZER ALARM 
+                   "iiiCC",              // BUZZER ALERT CLOSING DOOR
+                   " "  }; 
+                   
+char*         currentTunePlayed;
+int           currentTunePlayedNoteIdx;
+unsigned long currentTunePlayedNoteStartTimeMs;
+boolean       buzzerIsPlaying = false;
 
 
 
@@ -90,14 +104,8 @@ void setup()
     // Console log
     Serial.begin(9600);
 
-    // RTC 
-    Wire.begin();
-    DS3231_init(DS3231_INTCN);
-    DS3231_clear_a1f();               // FIXME: should not reset the alarm but keep previous
-#ifdef SET_RTC_TIME
-    struct ts rightNowTime = { .sec = 0, .min = 8, .hour = 19, .mday = 9, .mon = 1, .year = 2016 };
-    DS3231_set( rightNowTime );
-#endif
+    // Init RTC 
+    initRTCAlarm();
 
     // Screen
     ledScreen.begin(0x70);
@@ -113,6 +121,8 @@ void setup()
 
     // TODO: DC Motor
 
+    // Buzzer
+    pinMode( BUZZER_PWD_PIN,              OUTPUT );
     return;
 }
 
@@ -137,34 +147,29 @@ void loop()
     if ( isAlarmSet() ) {
         ledScreen.writeDigitNum(2, 1);
     }
-                  
-/*    
-    if ( digitalRead( PIN_BUTTON_ALARM_ON_OFF ) == HIGH ) {
-      ledScreen.print( 3333 );
-      analogWrite( PIN_FAN, 255 );
-    } else {
-      analogWrite( PIN_FAN, 0 );    
+
+    // --- Is the alarm triggering?
+    if ( isAlarmTriggered() ) {
+        // Clear the alarm
+        clearAlarm();
+        // Set the door status to opening
+        if ( alarmDoorStatus != ALARM_DOOR_STATUS_OPENING && alarmDoorStatus != ALARM_DOOR_STATUS_OPEN ) {
+            alarmDoorStatus = ALARM_DOOR_STATUS_OPENING;
+            // alarmDoorOpeningPct = 0;   // Not for STATUS_CLOSING
+        }
     }
-*/
 
-
-//#define ALARM_DOOR_STATUS_CLOSED    0
-//#define ALARM_DOOR_STATUS_OPENING   1
-//#define ALARM_DOOR_STATUS_OPEN      2
-//#define ALARM_DOOR_STATUS_CLOSING   3
-//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
-//int     alarmDoorOpeningPct = 0;
-
-
-//timePressedSetClockMs       = 0L;
-//unsigned long timePressedSetWakeUpTimeMs  = 0L;
-//unsigned long timePressedAlarmOnOffMs 
-
-
-
+    // --- Open the door, turn on the fan, play music
+    performDoorFanBuzzerAlarm();
 
     // Write display when we are sure to have the correct thing displayed 
     ledScreen.writeDisplay();
+
+    // --- Buzzer - currently played tune?
+    if (buzzerIsPlaying) {
+        playTuneNextNote();
+    }
+
 
     // --- To loop every loopDurationMs period. 
     //      If took more than loopDurationMs, loop immediately
@@ -184,10 +189,47 @@ void loop()
 
 
 
+
+
+
+
 // =============================================================================================
 // ++++++ HELPER FUNCTIONS ++++++
 // =============================================================================================
 
+
+// ============================= FAN, MOTOR ==========================================
+
+/**
+ * 
+ */
+void performDoorFanBuzzerAlarm() 
+{
+    // --- Fan
+    boolean isFanOn = (alarmDoorStatus == ALARM_DOOR_STATUS_OPEN);
+    digitalWrite( PIN_FAN, isFanOn ? HIGH : LOW ); 
+
+
+               
+//#define ALARM_DOOR_STATUS_CLOSED    0
+//#define ALARM_DOOR_STATUS_OPENING   1
+//#define ALARM_DOOR_STATUS_OPEN      2
+//#define ALARM_DOOR_STATUS_CLOSING   3
+//int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
+//int     alarmDoorOpeningPct = 0;
+
+//unsigned long timeTriggeredAlarm          = 0L;
+
+
+    return;
+}
+
+
+
+
+
+
+// ============================= DISPLAY ==========================================
 
 /**
  * Display the time from the RTC 
@@ -220,6 +262,9 @@ void displayTimeClock()
 }
 
 
+
+
+// ============================= BUTTONS ==========================================
 
 /**
  * Act according to the button(s) pressed 
@@ -341,6 +386,22 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 
 
 // ============================= ALARM ==========================================
+
+/**
+ *  Init alarm
+ */
+void initRTCAlarm()
+{
+    Wire.begin();
+    DS3231_set_creg( DS3231_get_addr(DS3231_CONTROL_ADDR) | DS3231_INTCN );   // Enable INT pin on the DS3231
+    DS3231_clear_a1f();               // Reset the alarm signal, but keep previous time and config
+#ifdef SET_RTC_TIME
+    struct ts rightNowTime = { .sec = 0, .min = 8, .hour = 19, .mday = 9, .mon = 1, .year = 2016 };
+    DS3231_set( rightNowTime );
+#endif
+    return;
+}
+
 
 /**
  *  @return true if the alarm is set  //  triggered
@@ -491,8 +552,121 @@ void addToClockTime( unsigned int addSeconds, boolean resetSeconds )
 
 
 
+
+
+// ============================= BUZZER ==========================================
+
+
+/** +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  Play a tune. Start the first note here, it will be continued for the remaining notes in the loop
+ *  @param tuneId  corresponds to the index in the TUNES array
+ */
+void playTune( int tuneId )
+{
+    // Check we know the tuneId
+    if (tuneId < 0 || tuneId > BUZZER__LAST_TUNE)
+        tuneId = 0;
+  
+    // Get the music score
+    currentTunePlayed  = TUNES[ tuneId ];
+  
+    // Is something already playing? If yes, wait for the note to finish!
+    if (buzzerIsPlaying) {
+        currentTunePlayedNoteIdx  = -1;    // Trick to start at the first note of this tune
+        return;
+    }
+    
+    // Mark the start
+    currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
+    currentTunePlayedNoteIdx         = 0;
+    buzzerIsPlaying = true;
+  
+    // Play the first note
+    tone( BUZZER_PWD_PIN, frequency( currentTunePlayed[0] ), BUZZER_ONE_NOTE_SUPPL_MS + BUZZER_ONE_NOTE_DURATION_MS );  // 50ms additional to avoid blanks
+    return;
+}
+
+/**
+ * Called by loop() to play the rest of the tune
+ */
+void playTuneNextNote()
+{
+  // Should never happen, but we know what it is...
+  if ( !buzzerIsPlaying || !currentTunePlayed || currentTunePlayedNoteIdx >= sizeof(currentTunePlayed) ) {
+    buzzerIsPlaying = false;
+    noTone( BUZZER_PWD_PIN );
+    return;
+  }
+  
+  // Has time elapsed?
+  if ( loopStartMs - currentTunePlayedNoteStartTimeMs < BUZZER_ONE_NOTE_DURATION_MS ) {
+    return;
+  }
+  
+  // --- Now play the next note
+  currentTunePlayedNoteIdx++;
+  // End of the tune?
+  if ( currentTunePlayedNoteIdx >= sizeof(currentTunePlayed) ) {
+    buzzerIsPlaying = false;
+    noTone( BUZZER_PWD_PIN );
+    return;    
+  }
+  // Ok now there is a next note to play! We add 50ms additional duration to avoid blanks. The next tone() interrupts anyway
+  currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
+  tone( BUZZER_PWD_PIN, frequency( currentTunePlayed[currentTunePlayedNoteIdx] ), BUZZER_ONE_NOTE_SUPPL_MS + BUZZER_ONE_NOTE_DURATION_MS );
+
+  return;
+}
+
+
+
+
+/**
+ *  Return the frequency of a note, to be used in build-in tone() function
+ *
+ *  WARNING:
+ *    - Only one tone can be generated at a time. If a tone is already playing on a different pin, the call to tone() will have no effect. 
+ *        If the tone is playing on the same pin, the call will set its frequency.
+ *    - Use of the tone() function will interfere with PWM output on pins 3 and 11 (on boards other than the Mega).
+ *    - It is not possible to generate tones lower than 31Hz.
+ */
+unsigned int frequency(char note) 
+{
+  // This function takes a note character (a-g), and returns the
+  // corresponding frequency in Hz for the tone() function.
+  
+  const int numNotes = 22;  // number of notes we're storing
+  
+  // For the "char" (character) type, we put single characters in single quotes.
+
+  // Added by Eric:    S= G3   K= C4#   k= C5#   P= F4#   p= F5#
+  char         notes[]       = { ' ', 'S', 'A', 'B', 'C', 'K', 'D', 'E', 'F', 'P', 'G', 'a', 'b', 'c', 'k', 'd', 'e', 'f', 'p', 'g', 'h', 'i' };
+  unsigned int frequencies[] = {   0, 196, 220, 247, 262, 277, 294, 330, 349, 370, 392, 440, 494, 523, 554, 587, 659, 698, 740, 784, 880, 988 };
+  
+  // Now we'll search through the letters in the array, and if
+  // we find it, we'll return the frequency for that note.
+  
+  int startIdx = (note < 'a' ? 0 : 10);
+  for (int i = startIdx; i < numNotes; i++) {     // Step through the notes
+    if (notes[i] == note)  
+      return (frequencies[i]);                    // Yes! Return the frequency
+  }
+  return 0;   // We looked through everything and didn't find it,
+              // but we still need to return a value, so return 0.
+}
+ 
+
+
+
+
 /*
- ////  ledScreen.writeDigitNum(2, 0, true ); // lower + upper + decimal (all)
+// TODO: Doc is wrong about writeDigitNum(location, number, dot). Or mess up with drawColon() ?
+// 0x02 - center colon
+// 0x04 - left colon - lower dot
+// 0x08 - left colon - upper dot
+// 0x10 - decimal point
+
+////  ledScreen.writeDigitNum(2, 0, true ); // lower + upper + decimal (all)
 ////  ledScreen.writeDigitNum(2, 1, true ); // upper
 ////  ledScreen.writeDigitNum(2, 2, true ); // lower + decimal
 ////  ledScreen.writeDigitNum(2, 3, true ); // lower + upper
