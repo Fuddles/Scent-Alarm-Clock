@@ -241,12 +241,14 @@ void performDoorFanBuzzerAlarm()
             timeTriggeredOpeningClosingMs = loopStartMs;
             playTune(BUZZER_CLOSING_DOOR);
             // alarmDoorOpeningPct = 100;     // No, as Opening may have been interrupted
-        } else if ( alarmDoorOpeningPct == 0 ) {
+        } 
+        if ( alarmDoorOpeningPct <= 0 ) {
             // Door is fully closed
-            alarmDoorStatus = ALARM_DOOR_STATUS_CLOSED;
+            alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
+            alarmDoorOpeningPct = 0;
         } else if ( loopStartMs - timeTriggeredOpeningClosingMs >= 1000 ) {
             // Then move the door, alarmDoorOpeningPct going from 100 to 0, to close it over 2 seconds ( / 2000 * 100)
-            unsigned int targetPct = 100 - (loopStartMs - timeTriggeredOpeningClosingMs - 1000) / 20;
+            int targetPct = 100 - (loopStartMs - timeTriggeredOpeningClosingMs - 1000) / 20;
             if ( targetPct < 0 ) {
                 targetPct = 0;
             }
@@ -265,12 +267,13 @@ void performDoorFanBuzzerAlarm()
             // playTune(BUZZER_CLOSING_DOOR); // No tune for opening
             // alarmDoorOpeningPct = 100;     // No, as Opening may have been interrupted
         }
-        if ( alarmDoorOpeningPct == 100 ) {
+        if ( alarmDoorOpeningPct >= 100 ) {
             // Door is fully open
-            alarmDoorStatus = ALARM_DOOR_STATUS_OPEN;
+            alarmDoorStatus     = ALARM_DOOR_STATUS_OPEN;
+            alarmDoorOpeningPct = 100;
         } else {
             // Then move the door, alarmDoorOpeningPct going from 100 to 0, to close it over 2 seconds ( / 2000 * 100)
-            unsigned int targetPct = loopStartMs - timeTriggeredOpeningClosingMs / 20;
+            int targetPct = (loopStartMs - timeTriggeredOpeningClosingMs) / 20;
             if ( targetPct > 100 ) {
                 targetPct = 100;
             }
