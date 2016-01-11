@@ -59,12 +59,15 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 #define PIN_FAN                           6
 
 // ----- Inits for the DC motor: PINS and trigger time    // TODO: PINS 8,9,12,13
+#include <Stepper.h>
+
 #define MOTOR_PIN_IN1                     10
 #define MOTOR_PIN_IN2                     11 
 #define MOTOR_PIN_IN3                     12 
 #define MOTOR_PIN_IN4                     13 
 
 unsigned long timeTriggeredAlarm          = 0L;
+
 
 // --- Buzzer defs
 //      WARNING: Use of the tone() function will interfere with PWM output on pins 3 and 11    // FIXME!!
@@ -89,6 +92,7 @@ char*         currentTunePlayed;
 int           currentTunePlayedNoteIdx;
 unsigned long currentTunePlayedNoteStartTimeMs;
 boolean       buzzerIsPlaying = false;
+
 
 
 
@@ -209,6 +213,10 @@ void performDoorFanBuzzerAlarm()
     boolean isFanOn = (alarmDoorStatus == ALARM_DOOR_STATUS_OPEN);
     digitalWrite( PIN_FAN, isFanOn ? HIGH : LOW ); 
 
+
+    // TODO: STEPPER for Door !!!!!
+
+    // TODO: Play Tunes
 
                
 //#define ALARM_DOOR_STATUS_CLOSED    0
