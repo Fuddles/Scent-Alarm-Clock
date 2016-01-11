@@ -22,8 +22,10 @@ unsigned long loopEndMs       = 0L;
 #define ALARM_DOOR_STATUS_OPENING   1
 #define ALARM_DOOR_STATUS_OPEN      2
 #define ALARM_DOOR_STATUS_CLOSING   3
-int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
-int     alarmDoorOpeningPct = 0;          // Between 0 (closed) and 100 (open)
+int           alarmDoorStatus                 = ALARM_DOOR_STATUS_CLOSED;
+int           alarmDoorOpeningPct             = 0;          // Between 0 (closed) and 100 (open)
+unsigned long timeTriggeredOpeningClosingMs   = 0L;
+
 
 // Testing
 #define DELAY_2BUTTONS_TEST_MS      3000
@@ -65,8 +67,6 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 #define MOTOR_PIN_IN2                     11 
 #define MOTOR_PIN_IN3                     12 
 #define MOTOR_PIN_IN4                     13 
-
-unsigned long timeTriggeredAlarm          = 0L;
 
 
 // --- Buzzer defs
@@ -158,7 +158,8 @@ void loop()
         clearAlarm();
         // Set the door status to opening
         if ( alarmDoorStatus != ALARM_DOOR_STATUS_OPENING && alarmDoorStatus != ALARM_DOOR_STATUS_OPEN ) {
-            alarmDoorStatus = ALARM_DOOR_STATUS_OPENING;
+            alarmDoorStatus               = ALARM_DOOR_STATUS_OPENING;
+            timeTriggeredOpeningClosingMs = 0L;
             // alarmDoorOpeningPct = 0;   // Not for STATUS_CLOSING
         }
     }
@@ -213,11 +214,81 @@ void performDoorFanBuzzerAlarm()
     boolean isFanOn = (alarmDoorStatus == ALARM_DOOR_STATUS_OPEN);
     digitalWrite( PIN_FAN, isFanOn ? HIGH : LOW ); 
 
+#ifdef DEBUG
+        Serial.print( "Fan is " );
+        Serial.print( isFanOn ? "ON" : "off" );
+        Serial.print( " and Door status is " );
+        Serial.print( alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED  ? "CLOSED" 
+                    : alarmDoorStatus == ALARM_DOOR_STATUS_OPENING ? "OPENING" 
+                    : alarmDoorStatus == ALARM_DOOR_STATUS_OPEN    ? "OPEN" 
+                    : alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING ? "CLOSING" 
+                    : "BUG!" );
+        Serial.print( ", with OpeningPct = " );
+        Serial.println( alarmDoorOpeningPct );
+#endif
 
-    // TODO: STEPPER for Door !!!!!
 
-    // TODO: Play Tunes
+    // --- Door and Buzzer!
+    if ( alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED ) {
+        // Make sure timeTriggeredOpeningClosingMs reset. Otw, do not do anything else
+        timeTriggeredOpeningClosingMs  = 0L;
+        return;
+    }
+    
+    if ( alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING ) {
+        // First second: do not move and play buzzer alert
+        if ( timeTriggeredOpeningClosingMs == 0L ) {
+            timeTriggeredOpeningClosingMs = loopStartMs;
+            playTune(BUZZER_CLOSING_DOOR);
+            // alarmDoorOpeningPct = 100;     // No, as Opening may have been interrupted
+        } else if ( alarmDoorOpeningPct == 0 ) {
+            // Door is fully closed
+            alarmDoorStatus = ALARM_DOOR_STATUS_CLOSED;
+        } else if ( loopStartMs - timeTriggeredOpeningClosingMs >= 1000 ) {
+            // Then move the door, alarmDoorOpeningPct going from 100 to 0, to close it over 2 seconds ( / 2000 * 100)
+            unsigned int targetPct = 100 - (loopStartMs - timeTriggeredOpeningClosingMs - 1000) / 20;
+            if ( targetPct < 0 ) {
+                targetPct = 0;
+            }
 
+            // TODO : move from alarmDoorOpeningPct current position to targetPct
+            //        !!!!!
+            
+            alarmDoorOpeningPct = targetPct;            
+        }
+        return;
+    }
+
+    if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPENING ) {
+        if ( timeTriggeredOpeningClosingMs == 0L ) {
+            timeTriggeredOpeningClosingMs = loopStartMs;
+            // playTune(BUZZER_CLOSING_DOOR); // No tune for opening
+            // alarmDoorOpeningPct = 100;     // No, as Opening may have been interrupted
+        }
+        if ( alarmDoorOpeningPct == 100 ) {
+            // Door is fully open
+            alarmDoorStatus = ALARM_DOOR_STATUS_OPEN;
+        } else {
+            // Then move the door, alarmDoorOpeningPct going from 100 to 0, to close it over 2 seconds ( / 2000 * 100)
+            unsigned int targetPct = loopStartMs - timeTriggeredOpeningClosingMs / 20;
+            if ( targetPct > 100 ) {
+                targetPct = 100;
+            }
+
+            // TODO : move from alarmDoorOpeningPct current position to targetPct
+            //        !!!!!
+
+            alarmDoorOpeningPct = targetPct;
+        }
+        return;
+    }
+    
+    if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
+        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 15000 && !buzzerIsPlaying ) {
+            // After 15s, play tune !
+            playTune( BUZZER_ALARM );
+        }
+    }
                
 //#define ALARM_DOOR_STATUS_CLOSED    0
 //#define ALARM_DOOR_STATUS_OPENING   1
@@ -226,7 +297,7 @@ void performDoorFanBuzzerAlarm()
 //int     alarmDoorStatus     = ALARM_DOOR_STATUS_CLOSED;
 //int     alarmDoorOpeningPct = 0;
 
-//unsigned long timeTriggeredAlarm          = 0L;
+//unsigned long timeTriggeredOpeningClosingMs          = 0L;
 
 
     return;
@@ -303,8 +374,9 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
             // Find out if we need to change some status
             if (  (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSING || alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED) 
                && (loopStartMs - timePressedSetClockMs > DELAY_2BUTTONS_TEST_MS) ) {
-                alarmDoorStatus     = ALARM_DOOR_STATUS_OPENING;
-                // alarmDoorOpeningPct = 0;   // Not for STATUS_CLOSING
+                alarmDoorStatus               = ALARM_DOOR_STATUS_OPENING;
+                timeTriggeredOpeningClosingMs = 0L;
+                // alarmDoorOpeningPct = 0;   // Not for STATUS_CLOSING!
             }
         }
         return;
@@ -322,7 +394,8 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         timePressedAlarmOnOffMs = loopStartMs;
         // If alarm is on, turn it off
         if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPENING || alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
-            alarmDoorStatus = ALARM_DOOR_STATUS_CLOSING;
+            alarmDoorStatus                = ALARM_DOOR_STATUS_CLOSING;
+            timeTriggeredOpeningClosingMs  = 0L;
         } 
         else if (alarmDoorStatus == ALARM_DOOR_STATUS_CLOSED) {
             // Toggle between on and off the alarm
