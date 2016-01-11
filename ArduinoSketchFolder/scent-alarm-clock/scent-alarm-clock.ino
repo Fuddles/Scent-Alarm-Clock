@@ -68,9 +68,23 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 #define MOTOR_PIN_IN3                     12 
 #define MOTOR_PIN_IN4                     13 
 
+// From https://arduino-info.wikispaces.com/SmallSteppers
+//  32 confirmed by http://42bots.com/tutorials/28byj-48-stepper-motor-with-uln2003-driver-and-arduino-uno/
+//  64:1 gear ratio
+// Number of steps per revolution of INTERNAL motor in 4-step mode
+#define STEPS_PER_MOTOR_REVOLUTION        32   
+// Steps per OUTPUT SHAFT of gear reduction
+#define STEPS_PER_OUTPUT_REVOLUTION       2048            // 32 * 64 = 2048  
+
+// Our total number of steps to open the door
+#define TOTAL_STEPS_DOOR_OPENING          350
+
+// Steps is the number of steps in one revolution of the motor. 32 according to
+Stepper motor = Stepper( STEPS_PER_MOTOR_REVOLUTION, MOTOR_PIN_IN1, MOTOR_PIN_IN2, MOTOR_PIN_IN3, MOTOR_PIN_IN4 );   // steps, pin1, pin2, pin3, pin4)
+
 
 // --- Buzzer defs
-//      WARNING: Use of the tone() function will interfere with PWM output on pins 3 and 11    // FIXME!!
+//      WARNING: Use of the tone() function will interfere with PWM output on pins 3 and 11 
 #define BUZZER_PWD_PIN                    5 
 
 #define BUZZER_ALARM                      1
@@ -123,9 +137,10 @@ void setup()
     // Fan
     pinMode( PIN_FAN,                     OUTPUT );
 
-    // TODO: DC Motor
-
-    playTune(1);      // FIXME
+    // DC Motor
+    motor.setSpeed( 768 );            // rpms: 2000 forbidden. 1000 gives ~4 seconds for 2048 steps = 360 deg
+    // Test: motor.step when >0 counter-clockwise. 512 is 90 deg
+    // motor.step( TOTAL_STEPS_DOOR_OPENING );            // WARNING: motor.step is BLOCKING!
 
     // Buzzer
     pinMode( BUZZER_PWD_PIN,              OUTPUT );
@@ -257,9 +272,18 @@ void performDoorFanBuzzerAlarm()
                 targetPct = 0;
             }
 
-            // TODO : move from alarmDoorOpeningPct current position to targetPct
-            //        !!!!!
-            
+            // Move from alarmDoorOpeningPct current position to targetPct
+            //    motor.step when >0 counter-clockwise. 512 is 90 deg  // WARNING: motor.step is BLOCKING!
+            int numSteps = ((targetPct - alarmDoorOpeningPct) * TOTAL_STEPS_DOOR_OPENING) / 100;
+            unsigned long now = millis();
+            motor.step( numSteps );     // WARNING: motor.step is BLOCKING!
+#ifdef DEBUG
+            Serial.print( "Stepper Motor CLOSING by numSteps = " );
+            Serial.print( numSteps );
+            Serial.print( ", and it took " );
+            Serial.print( millis() - now );
+            Serial.println( " ms" );
+#endif
             alarmDoorOpeningPct = targetPct;            
         }
         return;
@@ -282,9 +306,18 @@ void performDoorFanBuzzerAlarm()
                 targetPct = 100;
             }
 
-            // TODO : move from alarmDoorOpeningPct current position to targetPct
-            //        !!!!!
-
+            // Move from alarmDoorOpeningPct current position to targetPct
+            //    motor.step when >0 counter-clockwise. 512 is 90 deg  // WARNING: motor.step is BLOCKING!
+            int numSteps = ((targetPct - alarmDoorOpeningPct) * TOTAL_STEPS_DOOR_OPENING) / 100;
+            unsigned long now = millis();
+            motor.step( numSteps );     // WARNING: motor.step is BLOCKING!
+#ifdef DEBUG
+            Serial.print( "Stepper Motor OPENING by numSteps = " );
+            Serial.print( numSteps );
+            Serial.print( ", and it took " );
+            Serial.print( millis() - now );
+            Serial.println( " ms" );
+#endif
             alarmDoorOpeningPct = targetPct;
         }
         return;
