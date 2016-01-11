@@ -9,8 +9,8 @@
 // #define SET_RTC_TIME  true
 
 // Delay and duration when alarm ON
-#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     30
-#define MAX_DURATION_DOOR_OPEN_SECS           600
+#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     30L
+#define MAX_DURATION_DOOR_OPEN_SECS           600L
 
 // Buffer size to print on the console
 #define BUFFER_SIZE   256
@@ -328,14 +328,14 @@ void performDoorFanBuzzerAlarm()
     }
     
     if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
-        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 1000 * MAX_DURATION_DOOR_OPEN_SECS ) {
+        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 1000L * MAX_DURATION_DOOR_OPEN_SECS ) {
             // After 10 min, stop the alarm anyway
             alarmDoorStatus                = ALARM_DOOR_STATUS_CLOSING;
             timeTriggeredOpeningClosingMs  = 0L;
             clearAlarm();
             return;
         }
-        if ( !buzzerIsPlaying && loopStartMs - timeTriggeredOpeningClosingMs >= 1000 * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS ) {
+        if ( !buzzerIsPlaying && loopStartMs - timeTriggeredOpeningClosingMs >= 1000L * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS ) {
             // After 15s, play tune !
             playTune( BUZZER_ALARM );
         }
