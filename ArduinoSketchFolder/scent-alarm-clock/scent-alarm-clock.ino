@@ -324,7 +324,7 @@ void performDoorFanBuzzerAlarm()
     }
     
     if ( alarmDoorStatus == ALARM_DOOR_STATUS_OPEN ) {
-        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 15000 && !buzzerIsPlaying ) {
+        if ( loopStartMs - timeTriggeredOpeningClosingMs >= 30000 && !buzzerIsPlaying ) {
             // After 15s, play tune !
             playTune( BUZZER_ALARM );
         }
