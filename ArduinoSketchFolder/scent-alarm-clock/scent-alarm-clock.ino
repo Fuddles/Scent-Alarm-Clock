@@ -84,8 +84,8 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 //  char notes[] = { ' ', 'S', 'A', 'B', 'C', 'K', 'D', 'E', 'F', 'P', 'G', 'a', 'b', 'c', 'k', 'd', 'e', 'f', 'p', 'g', 'h', 'i' };
 //  Added by Eric:    S= G3   K= C4#   k= C5#   P= F4#   p= F5#
 char* TUNES[]  = { " ",
-                   "CCDDEEFFGGaabbccddeeffgg",        // BUZZER ALARM 
-                   "iiiCC",              // BUZZER ALERT CLOSING DOOR
+                   "EEE EEE EEE KK GEEE KK GEEEEE ",    // BUZZER ALARM 
+                   "ccaa",                              // BUZZER ALERT CLOSING DOOR
                    " "  }; 
                    
 String        currentTunePlayed;
