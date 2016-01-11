@@ -49,7 +49,7 @@ unsigned long     timeToggledMiddleColonMs  = 0L;
 // ----- Inits for the buttons
 #define PIN_BUTTON_SET_CLOCK              2
 #define PIN_BUTTON_SET_WAKE_UP_TIME       4
-#define PIN_BUTTON_ALARM_ON_OFF           3
+#define PIN_BUTTON_ALARM_ON_OFF           6
 
 // 0 if not pressed, or time in millis
 unsigned long timePressedSetClockMs       = 0L;
@@ -58,13 +58,13 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 
 
 // ----- Inits for the fan
-#define PIN_FAN                           6
+#define PIN_FAN                           7
 
 // ----- Inits for the DC motor: PINS and trigger time    // TODO: PINS 8,9,12,13
 #include <Stepper.h>
 
-#define MOTOR_PIN_IN1                     10
-#define MOTOR_PIN_IN2                     11 
+#define MOTOR_PIN_IN1                     8
+#define MOTOR_PIN_IN2                     9 
 #define MOTOR_PIN_IN3                     12 
 #define MOTOR_PIN_IN4                     13 
 
@@ -83,14 +83,14 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 // Tunes are series of letters of equal duration (loopDurationMs), so write the same note several times to play it longer
 //  char notes[] = { ' ', 'S', 'A', 'B', 'C', 'K', 'D', 'E', 'F', 'P', 'G', 'a', 'b', 'c', 'k', 'd', 'e', 'f', 'p', 'g', 'h', 'i' };
 //  Added by Eric:    S= G3   K= C4#   k= C5#   P= F4#   p= F5#
-char* TUNES[] = {  " ",
-                   "CCCCGGcccc ",        // BUZZER ALARM 
+char* TUNES[]  = { " ",
+                   "CCDDEEFFGGaabbccddeeffgg",        // BUZZER ALARM 
                    "iiiCC",              // BUZZER ALERT CLOSING DOOR
                    " "  }; 
                    
-char*         currentTunePlayed;
+String        currentTunePlayed;
 int           currentTunePlayedNoteIdx;
-unsigned long currentTunePlayedNoteStartTimeMs;
+//unsigned long currentTunePlayedNoteStartTimeMs;   // Here we play one note per cycle
 boolean       buzzerIsPlaying = false;
 
 
@@ -124,6 +124,8 @@ void setup()
     pinMode( PIN_FAN,                     OUTPUT );
 
     // TODO: DC Motor
+
+    playTune(1);      // FIXME
 
     // Buzzer
     pinMode( BUZZER_PWD_PIN,              OUTPUT );
@@ -183,9 +185,11 @@ void loop()
     if ( loopEndMs - loopStartMs < loopDurationMs ) {
         int diff = loopDurationMs - (loopEndMs % loopDurationMs);
 #ifdef DEBUG
-        Serial.print( "Waiting for " );
-        Serial.print( diff );
-        Serial.println( " ms" );
+        if ( diff < 100 ) {
+            Serial.print( "Waiting for " );
+            Serial.print( diff );
+            Serial.println( " ms" );
+        }
 #endif
         delay( diff );
     }
@@ -423,10 +427,10 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 4000 ) {     // Less than 4 sec
             addToAlarmTime( 30, false );       // in seconds, reset seconds
         } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 6000 ) {     // Less than 6 sec
-            addToAlarmTime( 60, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 8000 ) {     // Less than 8 sec
+            addToAlarmTime( 90, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 9000 ) {     // Less than 9 sec
             addToAlarmTime( 180, false );      // in seconds, reset seconds
-        } else {                                                            // After 8 sec
+        } else {                                                            // After 9 sec
             addToAlarmTime( 2000, false );     // in seconds, reset seconds
         }
         
@@ -458,10 +462,10 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         } else if ( loopStartMs - timePressedSetClockMs < 4000 ) {          // Less than 4 sec
             addToClockTime( 30, false );       // in seconds, reset seconds
         } else if ( loopStartMs - timePressedSetClockMs < 6000 ) {          // Less than 6 sec
-            addToClockTime( 60, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 8000 ) {          // Less than 8 sec
+            addToClockTime( 90, false );      // in seconds, reset seconds
+        } else if ( loopStartMs - timePressedSetClockMs < 9000 ) {          // Less than 9 sec
             addToClockTime( 180, false );      // in seconds, reset seconds
-        } else {                                                            // After 8 sec
+        } else {                                                            // After 9 sec
             addToClockTime( 2000, false );     // in seconds, reset seconds
         }
 
@@ -666,8 +670,15 @@ void playTune( int tuneId )
         tuneId = 0;
   
     // Get the music score
-    currentTunePlayed  = TUNES[ tuneId ];
-  
+    currentTunePlayed  = String( TUNES[ tuneId ] );
+
+#ifdef DEBUG
+        Serial.print( "***** Playing tune #" );
+        Serial.print( tuneId );
+        Serial.print( " of notes: " );
+        Serial.println( currentTunePlayed );
+#endif
+    
     // Is something already playing? If yes, wait for the note to finish!
     if (buzzerIsPlaying) {
         currentTunePlayedNoteIdx  = -1;    // Trick to start at the first note of this tune
@@ -675,9 +686,9 @@ void playTune( int tuneId )
     }
     
     // Mark the start
-    currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
-    currentTunePlayedNoteIdx         = 0;
-    buzzerIsPlaying = true;
+    //currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
+    currentTunePlayedNoteIdx  = 0;
+    buzzerIsPlaying           = true;
   
     // Play the first note
     tone( BUZZER_PWD_PIN, frequency( currentTunePlayed[0] ), BUZZER_ONE_NOTE_SUPPL_MS + BUZZER_ONE_NOTE_DURATION_MS );  // 50ms additional to avoid blanks
@@ -690,29 +701,42 @@ void playTune( int tuneId )
 void playTuneNextNote()
 {
   // Should never happen, but we know what it is...
-  if ( !buzzerIsPlaying || !currentTunePlayed || currentTunePlayedNoteIdx >= sizeof(currentTunePlayed) ) {
+  if ( !buzzerIsPlaying || !currentTunePlayed || currentTunePlayedNoteIdx >= currentTunePlayed.length() ) {
     buzzerIsPlaying = false;
     noTone( BUZZER_PWD_PIN );
+#ifdef DEBUG
+        Serial.println( "+++++ WARNING - NO TONE!!" );
+#endif
     return;
   }
-  
+
+  // We just play one note per cycle
   // Has time elapsed?
-  if ( loopStartMs - currentTunePlayedNoteStartTimeMs < BUZZER_ONE_NOTE_DURATION_MS ) {
-    return;
-  }
+  //if ( loopStartMs - currentTunePlayedNoteStartTimeMs < BUZZER_ONE_NOTE_DURATION_MS ) {
+  //  return;
+  //}
   
   // --- Now play the next note
   currentTunePlayedNoteIdx++;
   // End of the tune?
-  if ( currentTunePlayedNoteIdx >= sizeof(currentTunePlayed) ) {
+  if ( currentTunePlayedNoteIdx >= currentTunePlayed.length() ) {
     buzzerIsPlaying = false;
     noTone( BUZZER_PWD_PIN );
+#ifdef DEBUG
+        Serial.print( "END OF TUNE: currentTunePlayedNoteIdx = " );
+        Serial.print( currentTunePlayedNoteIdx );
+        Serial.print( " and sizeof(currentTunePlayed) = " );
+        Serial.println( currentTunePlayed.length() );
+#endif
     return;    
   }
-  // Ok now there is a next note to play! We add 50ms additional duration to avoid blanks. The next tone() interrupts anyway
-  currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
+  // Ok now there is a next note to play! We add 100ms additional duration to avoid blanks. The next tone() interrupts anyway
+  //currentTunePlayedNoteStartTimeMs = loopStartMs;     // millis();
   tone( BUZZER_PWD_PIN, frequency( currentTunePlayed[currentTunePlayedNoteIdx] ), BUZZER_ONE_NOTE_SUPPL_MS + BUZZER_ONE_NOTE_DURATION_MS );
-
+#ifdef DEBUG
+        Serial.print( "NOTE PLAYED: " );
+        Serial.println( currentTunePlayed[currentTunePlayedNoteIdx] );
+#endif
   return;
 }
 
@@ -764,13 +788,4 @@ unsigned int frequency(char note)
 // 0x04 - left colon - upper dot
 // 0x08 - left colon - lower dot
 // 0x10 - decimal point
-
-////  ledScreen.writeDigitNum(2, 0, true ); // lower + upper + decimal (all)
-////  ledScreen.writeDigitNum(2, 1, true ); // upper
-////  ledScreen.writeDigitNum(2, 2, true ); // lower + decimal
-////  ledScreen.writeDigitNum(2, 3, true ); // lower + upper
-//ledScreen.writeDigitNum(2, 4, true ); // upper 
-////  ledScreen.writeDigitNum(2, 5, true ); // lower + upper
-////  ledScreen.writeDigitNum(2, 6, true ); // lower + upper + decimal (all)
-////  ledScreen.writeDigitNum(2, 7, true ); // upper
 */
