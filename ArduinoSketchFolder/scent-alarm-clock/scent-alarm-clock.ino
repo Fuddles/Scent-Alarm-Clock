@@ -453,20 +453,14 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
     if ( pressedSetWakeUpTime ) {
         if ( timePressedSetWakeUpTimeMs == 0L ) {                           // Just pressed
             timePressedSetWakeUpTimeMs  = loopStartMs;
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 1000 ) {     // Less than 1 sec
-            // Just display the time
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 2000 ) {     // Less than 2 sec
-            addToAlarmTime( 15, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 4000 ) {     // Less than 4 sec
-            addToAlarmTime( 30, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 6000 ) {     // Less than 6 sec
-            addToAlarmTime( 90, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetWakeUpTimeMs < 9000 ) {     // Less than 9 sec
-            addToAlarmTime( 180, false );      // in seconds, reset seconds
-        } else {                                                            // After 9 sec
-            addToAlarmTime( 2000, false );     // in seconds, reset seconds
+        } else {
+            unsigned int secsToAdd = calcSecondsToAdd( loopStartMs - timePressedSetWakeUpTimeMs );
+            if ( secsToAdd > 0 ) {
+                addToAlarmTime( secsToAdd, false );       // in seconds, reset seconds
+            }
+            // else just display the time
         }
-        
+                
         // Display alarm time. With lower dot to distinguish
         getAlarmTime();       // result in alarmRTCTime
         printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
@@ -488,18 +482,12 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
     if ( pressedSetClock ) {
         if ( timePressedSetClockMs == 0L ) {                                // Just pressed
             timePressedSetClockMs  = loopStartMs;
-        } else if ( loopStartMs - timePressedSetClockMs < 1000 ) {          // Less than 1 sec
-            // Just display the time
-        } else if ( loopStartMs - timePressedSetClockMs < 2000 ) {          // Less than 2 sec
-            addToClockTime( 15, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 4000 ) {          // Less than 4 sec
-            addToClockTime( 30, false );       // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 6000 ) {          // Less than 6 sec
-            addToClockTime( 90, false );      // in seconds, reset seconds
-        } else if ( loopStartMs - timePressedSetClockMs < 9000 ) {          // Less than 9 sec
-            addToClockTime( 180, false );      // in seconds, reset seconds
-        } else {                                                            // After 9 sec
-            addToClockTime( 2000, false );     // in seconds, reset seconds
+        } else {
+            unsigned int secsToAdd = calcSecondsToAdd( loopStartMs - timePressedSetClockMs );
+            if ( secsToAdd > 0 ) {
+                addToClockTime( secsToAdd, false );       // in seconds, reset seconds
+            }
+            // else just display the time
         }
 
         // Display the updated clock
@@ -517,6 +505,25 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 }
 
 
+
+/** Helper to get the number of seconds to add according to the time pressed. Happen 5 times per seconds */
+unsigned int calcSecondsToAdd( long diffFromTimePressedMs )
+{
+    if ( diffFromTimePressedMs < 1000 )                          // Less than 1 sec or Just pressed
+        return 0;
+  
+    if ( diffFromTimePressedMs < 2000 )                          // Less than 2 sec
+        return 15;
+    if ( diffFromTimePressedMs < 4000 )                          // Less than 4 sec
+        return 30;
+    if ( diffFromTimePressedMs < 6000 )                          // Less than 6 sec
+        return 90;
+    if ( diffFromTimePressedMs < 9000 )                          // Less than 9 sec
+        return 180;
+
+    // After 9s
+    return 2000;
+}
 
 
 
