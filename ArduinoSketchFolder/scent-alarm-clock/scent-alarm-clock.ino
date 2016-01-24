@@ -522,7 +522,7 @@ unsigned int calcSecondsToAdd( long diffFromTimePressedMs )
         return 180;
 
     // After 9s
-    return 1000;
+    return 800;
 }
 
 
