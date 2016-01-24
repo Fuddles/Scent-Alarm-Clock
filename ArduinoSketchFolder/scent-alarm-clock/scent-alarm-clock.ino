@@ -509,11 +509,11 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 /** Helper to get the number of seconds to add according to the time pressed. Happen 5 times per seconds */
 unsigned int calcSecondsToAdd( long diffFromTimePressedMs )
 {
-    if ( diffFromTimePressedMs < 1000 )                          // Less than 1 sec or Just pressed
+    if ( diffFromTimePressedMs < 700 )                          // Less than 1 sec or Just pressed
         return 0;
   
     if ( diffFromTimePressedMs < 2000 )                          // Less than 2 sec
-        return 15;
+        return 20;
     if ( diffFromTimePressedMs < 4000 )                          // Less than 4 sec
         return 30;
     if ( diffFromTimePressedMs < 6000 )                          // Less than 6 sec
@@ -522,7 +522,7 @@ unsigned int calcSecondsToAdd( long diffFromTimePressedMs )
         return 180;
 
     // After 9s
-    return 2000;
+    return 1000;
 }
 
 
