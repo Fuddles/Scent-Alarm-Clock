@@ -9,7 +9,7 @@
 // #define SET_RTC_TIME  true
 
 // Delay and duration when alarm ON
-#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     30L
+#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     210L
 #define MAX_DURATION_DOOR_OPEN_SECS           600L
 
 // Buffer size to print on the console
