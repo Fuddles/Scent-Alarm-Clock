@@ -8,6 +8,9 @@
 // Uncomment the line to set the time
 // #define SET_RTC_TIME  true
 
+// Screen Dim brightness (1..14)
+#define LOW_SCREEN_BRIGHTNESS      5
+
 // Delay and duration when alarm ON
 #define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     210L
 #define MAX_DURATION_DOOR_OPEN_SECS           600L
@@ -362,7 +365,7 @@ void displayTimeClock()
     Serial.println(buff);
 #endif
     // display the time on the screen, toggling the middle colon every second
-    printTimeOnLedScreen( rtcTime.hour, rtcTime.min );
+    printTimeOnLedScreen( rtcTime.hour, rtcTime.min, false );
     if ( loopStartMs - timeToggledMiddleColonMs > 950 ) {
         middleColonToggle = !middleColonToggle;
         timeToggledMiddleColonMs = loopStartMs;
@@ -380,7 +383,7 @@ void displayTimeClock()
     return;
 }
 
-void printTimeOnLedScreen( uint8_t hours, uint8_t minutes ) 
+void printTimeOnLedScreen( uint8_t hours, uint8_t minutes, boolean ledFullyBright ) 
 {
     ledScreen.print( hours*100 + minutes, DEC);
     if (hours == 0) {
@@ -389,6 +392,7 @@ void printTimeOnLedScreen( uint8_t hours, uint8_t minutes )
             ledScreen.writeDigitNum( 3, 0 );
         }
     }
+    ledScreen.setBrightness( ledFullyBright || (hours >= 7 && hours <= 20) ? 15 : LOW_SCREEN_BRIGHTNESS );     // Fully bright
     return;
 }
 
@@ -463,7 +467,7 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
                 
         // Display alarm time. With lower dot to distinguish
         getAlarmTime();       // result in alarmRTCTime
-        printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
+        printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1], true );
         ledScreen.writeDigitRaw(2, 0x08 | 0x02 );            // Lower left + colon.  Raw, not num!
         return;
     } else {
@@ -472,7 +476,7 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
               addToAlarmTime( 0, true );      // in seconds, reset seconds
               // Display alarm time one more cycle
               getAlarmTime();       // result in alarmRTCTime
-              printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1] );
+              printTimeOnLedScreen( alarmRTCTime[2], alarmRTCTime[1], true );
               ledScreen.writeDigitRaw(2, 0x08 | 0x02 );            // Lower left + colon.  Raw, not num!
         }
     }
