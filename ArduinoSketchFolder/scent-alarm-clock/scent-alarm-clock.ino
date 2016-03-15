@@ -1,5 +1,6 @@
 /**
  *  Alarm clock project that turns a fan on when the alarm triggers
+ *  Lea & Shelli, Hausner 2016
  */
 
 // Comment the line to remove the console debugging (via Serial)
@@ -9,11 +10,12 @@
 // #define SET_RTC_TIME  true
 
 // Screen Dim brightness (1..14)
-#define LOW_SCREEN_BRIGHTNESS      5
+#define LOW_SCREEN_BRIGHTNESS      3
 
 // Delay and duration when alarm ON
-#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     210L
+#define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     60L
 #define MAX_DURATION_DOOR_OPEN_SECS           600L
+unsigned long buzzerDelayTicks = 60L * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS;    // In 1/60th seconds
 
 // Buffer size to print on the console
 #define BUFFER_SIZE   256
@@ -84,7 +86,7 @@ unsigned long timePressedAlarmOnOffMs     = 0L;
 #define STEPS_PER_OUTPUT_REVOLUTION       2048            // 32 * 64 = 2048  
 
 // Our total number of steps to open the door
-#define TOTAL_STEPS_DOOR_OPENING          400
+#define TOTAL_STEPS_DOOR_OPENING          500
 
 // Steps is the number of steps in one revolution of the motor. 32 according to
 Stepper motor = Stepper( STEPS_PER_MOTOR_REVOLUTION, MOTOR_PIN_IN1, MOTOR_PIN_IN3, MOTOR_PIN_IN2, MOTOR_PIN_IN4 );   // steps, pin1, pin2, pin3, pin4)
@@ -283,7 +285,7 @@ void performDoorFanBuzzerAlarm()
             //    motor.step when >0 counter-clockwise. 512 is 90 deg  // WARNING: motor.step is BLOCKING!
             int numSteps = ((targetPct - alarmDoorOpeningPct) * TOTAL_STEPS_DOOR_OPENING) / 100;
             unsigned long now = millis();
-            motor.step( numSteps );     // WARNING: motor.step is BLOCKING!
+            motor.step( -numSteps );     // WARNING: motor.step is BLOCKING!
 #ifdef DEBUG
             Serial.print( "Stepper Motor CLOSING by numSteps = " );
             Serial.print( numSteps );
@@ -317,7 +319,7 @@ void performDoorFanBuzzerAlarm()
             //    motor.step when >0 counter-clockwise. 512 is 90 deg  // WARNING: motor.step is BLOCKING!
             int numSteps = ((targetPct - alarmDoorOpeningPct) * TOTAL_STEPS_DOOR_OPENING) / 100;
             unsigned long now = millis();
-            motor.step( numSteps );     // WARNING: motor.step is BLOCKING!
+            motor.step( -numSteps );     // WARNING: motor.step is BLOCKING!
 #ifdef DEBUG
             Serial.print( "Stepper Motor OPENING by numSteps = " );
             Serial.print( numSteps );
@@ -338,8 +340,8 @@ void performDoorFanBuzzerAlarm()
             clearAlarm();
             return;
         }
-        if ( !buzzerIsPlaying && loopStartMs - timeTriggeredOpeningClosingMs >= 1000L * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS ) {
-            // After 15s, play tune !
+        if ( !buzzerIsPlaying && loopStartMs - timeTriggeredOpeningClosingMs >= (1000L * buzzerDelayTicks) / 60L ) {     // 1000L * DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS
+            // After 60s, play tune !
             playTune( BUZZER_ALARM );
         }
     }
@@ -428,7 +430,14 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 
     // 2.--- Setting the alarm on/off
     if ( timePressedAlarmOnOffMs != 0L ) {
-        if ( pressedAlarmOnOff ) {    // Button still pressed, we ignore
+        if ( pressedAlarmOnOff ) {    // Button still pressed, we may update the buzzer delay!
+            unsigned int secsToAdd = calcSecondsToAdd( loopStartMs - timePressedAlarmOnOffMs );
+            if ( secsToAdd > 0 ) {
+                addToBuzzerDelay( secsToAdd );
+                // Display buzzer delay!
+                printTimeOnLedScreen( buzzerDelayTicks / 3600L, (buzzerDelayTicks / 60L) % 60, true );     // ledFullyBright
+                ledScreen.writeDigitRaw(2, 0x10 | 0x02 );            // Decimal point + colon.  Raw, not num!
+            }
             return;
         }
         // Alarm on/off button has just been released. Reset timePressed and go on.
@@ -697,6 +706,24 @@ void addToClockTime( unsigned int addSeconds, boolean resetSeconds )
     DS3231_set( rtcTime );
     return;  
 }
+
+
+
+/**
+ *  Add a number of seconds/60 to the delay between opening and buzzer start
+ */
+void addToBuzzerDelay( unsigned long addSeconds ) 
+{
+    if (addSeconds > 10000) {
+        addSeconds = 10000;
+    }
+    buzzerDelayTicks = ( buzzerDelayTicks + addSeconds) % 36000;   // 10 mins in 1/60th seconds
+    if ( buzzerDelayTicks < 600L ) {
+        buzzerDelayTicks = 600L;      // minimum 10 seconds 
+    }
+    return;  
+}
+
 
 
 
