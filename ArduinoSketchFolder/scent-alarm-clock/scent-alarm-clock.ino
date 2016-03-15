@@ -10,7 +10,7 @@
 // #define SET_RTC_TIME  true
 
 // Screen Dim brightness (1..14)
-#define LOW_SCREEN_BRIGHTNESS      3
+#define LOW_SCREEN_BRIGHTNESS      2
 
 // Delay and duration when alarm ON
 #define DELAY_DOOR_OPEN_BEFORE_MUSIC_SECS     60L
@@ -51,6 +51,7 @@ uint8_t   alarmRTCTime[4];                // second,minute,hour,day
 #include "Adafruit_GFX.h"
 
 Adafruit_7segment ledScreen                 = Adafruit_7segment();
+unsigned int      brightness                = 15;                     // Screen brightness at the end of each display cycle
 boolean           middleColonToggle         = false;
 unsigned long     timeToggledMiddleColonMs  = 0L;
 
@@ -194,6 +195,7 @@ void loop()
     performDoorFanBuzzerAlarm();
 
     // Write display when we are sure to have the correct thing displayed 
+    ledScreen.setBrightness( brightness );
     ledScreen.writeDisplay();
 
     // --- Buzzer - currently played tune?
@@ -394,7 +396,7 @@ void printTimeOnLedScreen( uint8_t hours, uint8_t minutes, boolean ledFullyBrigh
             ledScreen.writeDigitNum( 3, 0 );
         }
     }
-    ledScreen.setBrightness( ledFullyBright || (hours >= 7 && hours <= 20) ? 15 : LOW_SCREEN_BRIGHTNESS );     // Fully bright
+    brightness = ( ledFullyBright || (hours >= 7 && hours <= 20) ? 15 : LOW_SCREEN_BRIGHTNESS );     // 15 = Fully bright
     return;
 }
 
@@ -433,7 +435,9 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
         if ( pressedAlarmOnOff ) {    // Button still pressed, we may update the buzzer delay!
             unsigned int secsToAdd = calcSecondsToAdd( loopStartMs - timePressedAlarmOnOffMs );
             if ( secsToAdd > 0 ) {
-                addToBuzzerDelay( secsToAdd );
+                if ( loopStartMs - timePressedAlarmOnOffMs >= 1000L ) {
+                    addToBuzzerDelay( secsToAdd );
+                }
                 // Display buzzer delay!
                 printTimeOnLedScreen( buzzerDelayTicks / 3600L, (buzzerDelayTicks / 60L) % 60, true );     // ledFullyBright
                 ledScreen.writeDigitRaw(2, 0x10 | 0x02 );            // Decimal point + colon.  Raw, not num!
@@ -522,7 +526,7 @@ void actOnButtons( boolean pressedSetClock, boolean pressedSetWakeUpTime, boolea
 /** Helper to get the number of seconds to add according to the time pressed. Happen 5 times per seconds */
 unsigned int calcSecondsToAdd( long diffFromTimePressedMs )
 {
-    if ( diffFromTimePressedMs < 700 )                          // Less than 1 sec or Just pressed
+    if ( diffFromTimePressedMs < 700 )                           // Less than 1 sec or Just pressed
         return 0;
   
     if ( diffFromTimePressedMs < 2000 )                          // Less than 2 sec
